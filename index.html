@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>Salary App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+*{box-sizing:border-box;font-family:'Segoe UI',sans-serif;}
+body{background: linear-gradient(135deg,#4CAF50,#2E7D32);margin:0;}
+.header{color:white;text-align:center;padding:15px;font-size:18px;font-weight:bold;position:relative;}
+.container{padding:15px;padding-bottom:80px;}
+input, select{width:100%;padding:10px;margin:5px 0;border:none;border-radius:10px;background:#f1f1f1;}
+button{width:100%;padding:10px;margin:5px 0;border:none;border-radius:10px;background:#4CAF50;color:white;font-weight:bold;}
+.app{display:none;background:white;height:100vh;border-radius:20px 20px 0 0;overflow:auto;}
+.worker-block{background:white;padding:12px;margin:8px 0;border-radius:12px;box-shadow:0 3px 10px rgba(0,0,0,0.1);}
+.delete-btn{background:red;}
+.bottom-menu{position:fixed;bottom:0;width:100%;background:white;display:flex;justify-content:space-around;padding:8px 0;}
+.bottom-menu button{background:none;color:#333;font-size:22px;}
+.bottom-menu button.active{color:#4CAF50;}
+.dayBox{background:#f5f5f5;padding:5px;border-radius:8px;text-align:center;position:relative;}
+.present{background:#4CAF50;color:#fff;}
+.absent{background:#f44336;color:#fff;}
+#calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+</style>
+</head>
+
+<body>
+
+<!-- Login Screen -->
+<div id="loginScreen">
+<div class="header" id="loginTitle">Login</div>
+<div class="container">
+<input id="loginUser" placeholder="User">
+<input id="loginPass" type="password" placeholder="Password">
+<button id="loginBtn" onclick="login()">Login</button>
+<button id="registerBtn" onclick="goRegister()">Register</button>
+<button onclick="toggleLang()">🌐</button>
+</div>
+</div>
+
+<!-- Register Screen -->
+<div id="registerScreen" style="display:none;">
+<div class="header" id="registerTitle">Register</div>
+<div class="container">
+<input id="regUser" placeholder="User">
+<input id="regPass" type="password" placeholder="Password">
+<button id="createBtn" onclick="register()">Create</button>
+<button id="backBtn" onclick="backToLogin()">Back</button>
+</div>
+</div>
+
+<!-- Main App -->
+<div id="app" class="app">
+
+<!-- Screen 1: Add Worker -->
+<div id="screen1">
+<div class="header" id="appTitle">
+Salary App
+<button onclick="toggleLang()" style="position:absolute;left:10px;top:10px;background:#fff;color:#333;">🌐</button>
+</div>
+
+<div class="container">
+<input id="dailyLimit" type="number" placeholder="8" value="8">
+<input id="name" placeholder="Name">
+<input id="position" placeholder="Job">
+<input id="salary" type="number" placeholder="Salary">
+<button onclick="addWorker()" id="addBtn">Add Worker</button>
+<button onclick="logout()" style="background:red;"id="logoutBtn">Logout</button>
+</div>
+</div>
+
+<!-- Screen 2: Workers List -->
+<div id="screen2" style="display:none;">
+<button onclick="toggleLang()">🌐</button>
+<input id="searchWorker" placeholder="🔍 بحث عن عامل..." oninput="searchWorkers()">
+<div class="header" id="workersTitle">Workers</div>
+<div class="container" id="workersList"></div>
+</div>
+
+<!-- Screen 3: Calendar -->
+<div id="screen3" style="display:none;">
+<button onclick="toggleLang()">🌐</button>
+<div class="header" id="workerName"></div>
+<div class="container">
+<select id="monthSelect" onchange="buildCalendar()">
+<option value="31">31</option>
+<option value="30">30</option>
+<option value="28">28</option>
+</select>
+<div id="calendar"></div>
+</div>
+</div>
+
+<!-- Screen 4: Salary -->
+<div id="screen4" style="display:none;">
+<button onclick="toggleLang()">🌐</button>
+<div class="header" id="salaryTitle">Salary</div>
+<div class="container">
+<div id="statsBox" style="background:#f1f1f1;padding:10px;border-radius:10px;"></div>
+<canvas id="salaryChart"></canvas>
+<table border="1" width="100%">
+<thead>
+<tr>
+<th>Name</th>
+<th>Salary</th>
+<th>Job</th>
+<th>Days</th>
+<th>Hours</th>
+<th>Total</th>
+</tr>
+</thead>
+<tbody id="salaryTable"></tbody>
+</table>
+<button onclick="downloadPDF()" id="pdfBtn">PDF</button>
+</div>
+</div>
+
+<!-- Bottom Menu -->
+<div class="bottom-menu">
+<button onclick="goHome()">🏠</button>
+<button onclick="goWorkers()">👷</button>
+<button onclick="goSalary()">📊</button>
+</div>
+
+</div>
+
+<script>
+let users=JSON.parse(localStorage.getItem("users")||"[]");
+let currentUser=null;
+let currentWorker=null;
+let chart=null;
+let currentLang="ar";
+
+const translations={
+ar:{
+login:"دخول",register:"انشاء",user:"اسم المستخدم",pass:"كلمة السر",
+create:"Create",back:"Back",salaryApp:"حساب اجور",
+addWorker:"إضافة عامل",logout:"خروج",workers:"العمال",
+search:"بحث عن عامل...",salary:"الأجور",
+name:"الاسم",job:"الوظيفة",salaryLabel:"الأجر",
+addWorkerBtn:"إضافة عامل",delete:"حذف",open:"فتح",
+present:"حاضر ✔",absent:"غائب ✖"
+},
+fr:{
+login:"Connexion",register:"Inscription",user:"Utilisateur",pass:"Mot de passe",
+create:"Créer",back:"Retour",salaryApp:"Application Salaire",
+addWorker:"Ajouter Employé",logout:"Déconnexion",workers:"Employés",
+search:"Rechercher un employé...",salary:"Salaire",
+name:"Nom",job:"Poste",salaryLabel:"Salaire",
+addWorkerBtn:"Ajouter",delete:"Supprimer",open:"Ouvrir",
+present:"Présent ✔",absent:"Absent ✖"
+}
+};
+
+function applyLanguage(){
+let t=translations[currentLang];
+document.body.dir=currentLang==="ar"?"rtl":"ltr";
+
+document.getElementById("loginBtn").innerText=t.login;
+document.getElementById("registerBtn").innerText=t.register;
+document.getElementById("createBtn").innerText=t.create;
+document.getElementById("backBtn").innerText=t.back;
+document.getElementById("loginTitle").innerText=t.login;
+document.getElementById("registerTitle").innerText=t.register;
+document.getElementById("appTitle").childNodes[0].textContent=t.salaryApp;
+
+document.getElementById("name").placeholder=t.name;
+document.getElementById("position").placeholder=t.job;
+document.getElementById("salary").placeholder=t.salaryLabel;
+document.getElementById("dailyLimit").placeholder="8";
+
+document.getElementById("loginUser").placeholder=t.user;
+document.getElementById("loginPass").placeholder=t.pass;
+document.getElementById("regUser").placeholder=t.user;
+document.getElementById("regPass").placeholder=t.pass;
+
+document.getElementById("addBtn").innerText=t.addWorkerBtn;
+document.getElementById("logoutBtn").innerText=t.logout;
+document.getElementById("workersTitle").innerText=t.workers;
+document.getElementById("searchWorker").placeholder=t.search;
+document.getElementById("salaryTitle").innerText=t.salary;
+document.getElementById("pdfBtn").innerText="PDF";
+}
+
+function toggleLang(){currentLang=currentLang==="ar"?"fr":"ar";applyLanguage();renderWorkers();}
+
+function register(){
+let u=document.getElementById("regUser").value;
+let p=document.getElementById("regPass").value;
+if(!u||!p){alert("أدخل المعلومات كاملة");return;}
+users.push({user:u,pass:p});
+localStorage.setItem("users",JSON.stringify(users));
+backToLogin();
+}
+
+function login(){
+let u=document.getElementById("loginUser").value;
+let p=document.getElementById("loginPass").value;
+let f=users.find(x=>x.user===u&&x.pass===p);
+if(f){currentUser=u;localStorage.setItem("loggedUser",u);
+loginScreen.style.display="none";app.style.display="block";renderWorkers();}
+else alert("User/Pass غير صحيح");
+}
+
+function logout(){localStorage.removeItem("loggedUser");location.reload();}
+function goRegister(){loginScreen.style.display="none";registerScreen.style.display="block";}
+function backToLogin(){registerScreen.style.display="none";loginScreen.style.display="block";}
+
+function getWorkers(){return JSON.parse(localStorage.getItem("workers_"+currentUser)||"[]");}
+function saveWorkers(w){localStorage.setItem("workers_"+currentUser,JSON.stringify(w));}
+
+function addWorker(){
+let name=document.getElementById("name").value;
+let position=document.getElementById("position").value;
+let salary=parseFloat(document.getElementById("salary").value);
+if(!name||!position||!salary){alert("أدخل المعلومات كاملة");return;}
+let w=getWorkers();
+w.push({name,position,salary,calendar:{}});
+saveWorkers(w);
+renderWorkers();
+document.getElementById("name").value = "";
+document.getElementById("position").value = "";
+document.getElementById("salary").value = "";
+}
+
+
+function renderWorkers(){
+let w=getWorkers();
+workersList.innerHTML="";
+w.forEach((x,i)=>{
+workersList.innerHTML+=`
+<div class="worker-block">
+${x.name}<br>${x.position}
+<button onclick="openWorker(${i})">${translations[currentLang].open}</button>
+<button class="delete-btn" onclick="deleteWorker(${i})">🗑 ${translations[currentLang].delete}</button>
+</div>`;
+});
+}
+
+function deleteWorker(i){
+if(!confirm("متأكد؟"))return;
+let w=getWorkers(); w.splice(i,1); saveWorkers(w); renderWorkers();
+}
+
+function searchWorkers(){
+let k=document.getElementById("searchWorker").value.toLowerCase();
+let w=getWorkers();
+workersList.innerHTML="";
+w.forEach((x,i)=>{
+if(x.name.toLowerCase().includes(k)||x.position.toLowerCase().includes(k)){
+workersList.innerHTML+=`
+<div class="worker-block">
+${x.name}<br>${x.position}
+<button onclick="openWorker(${i})">${translations[currentLang].open}</button>
+<button class="delete-btn" onclick="deleteWorker(${i})">🗑 ${translations[currentLang].delete}</button>
+</div>`;
+}});
+}
+
+function openWorker(i){currentWorker=i;screen1.style.display="none";screen2.style.display="none";screen3.style.display="block";buildCalendar();}
+
+// زر + لكل يوم مع إظهار اللون بعد الاختيار
+function buildCalendar(){
+    let w = getWorkers()[currentWorker];
+    calendar.innerHTML = "";
+    let days = parseInt(monthSelect.value);
+    for(let d = 1; d <= days; d++){
+        let data = w.calendar[d] || {};
+        let present = data.day === 1;
+        let colorClass = present ? "present" : (data.day===0 ? "absent" : "");
+
+        calendar.innerHTML += `
+        <div class="dayBox ${colorClass}" id="dayBox${d}">
+            ${d}<br>
+            <input type="number" value="${data.hours||''}" onchange="setHours(${d},this.value)">
+            <div id="dayBtns${d}" style="display:none; margin-top:5px;">
+                <button onclick="setDay(${d},1)">${translations[currentLang].present}</button>
+                <button onclick="setDay(${d},0)">${translations[currentLang].absent}</button>
+            </div>
+            <button id="toggleBtn${d}" onclick="toggleDayBtns(${d})">+</button>
+        </div>`;
+    }
+}
+
+function toggleDayBtns(d){
+    let div = document.getElementById(`dayBtns${d}`);
+    div.style.display = div.style.display === "none" ? "block" : "none";
+}
+
+function setDay(d,value){
+    let w = getWorkers();
+    let worker = w[currentWorker];
+
+    worker.calendar[d] = worker.calendar[d] || {};
+    worker.calendar[d].day = value;
+    worker.calendar[d].hours = worker.calendar[d].hours || 0;
+
+    saveWorkers(w);
+    
+    // تغيير اللون
+    let dayBox = document.getElementById(`dayBox${d}`);
+    if(value === 1) { dayBox.classList.add("present"); dayBox.classList.remove("absent"); }
+    else { dayBox.classList.add("absent"); dayBox.classList.remove("present"); }
+
+    // إخفاء أزرار بعد الاختيار
+    document.getElementById(`dayBtns${d}`).style.display = "none";
+
+    updateSalary();
+}
+
+function setHours(d,v){
+    let w=getWorkers(); let worker=w[currentWorker];
+    worker.calendar[d]=worker.calendar[d]||{}; worker.calendar[d].hours=parseFloat(v)||0;
+    saveWorkers(w); updateSalary();
+}
+
+function updateSalary(){
+let w=getWorkers();
+salaryTable.innerHTML="";
+let totalSalary=0,totalDays=0,totalHours=0;
+let limit=parseFloat(dailyLimit.value)||8;
+let names=[],totals=[];
+w.forEach(x=>{
+let d=0,h=0;
+Object.values(x.calendar||{}).forEach(v=>{if(v.day===1)d++;h+=v.hours||0;});
+let daily=x.salary;
+let total=(d+(h/limit))*x.salary;
+totalSalary+=total; totalDays+=d; totalHours+=h;
+names.push(x.name); totals.push(total);
+salaryTable.innerHTML+=`
+<tr>
+<td>${x.name}</td>
+<td>${daily.toFixed(2)}</td>
+<td>${x.position}</td>
+<td>${d}</td>
+<td>${h}</td>
+<td>${total.toFixed(2)}</td>
+</tr>`;
+});
+statsBox.innerHTML=`Total Salary: ${totalSalary.toFixed(2)}<br>Total Days: ${totalDays}<br>Total Hours: ${totalHours}`;
+if(chart)chart.destroy();
+chart=new Chart(document.getElementById("salaryChart"),{type:'bar',data:{labels:names,datasets:[{data:totals}]}});}
+
+function downloadPDF(){
+const { jsPDF }=window.jspdf; let doc=new jsPDF(); let w=getWorkers(); let y=10;
+w.forEach(x=>{
+let d=0,h=0;
+Object.values(x.calendar||{}).forEach(v=>{if(v.day===1)d++;h+=v.hours||0;});
+let daily=x.salary;
+let total=(d+(h/(parseFloat(dailyLimit.value)||8)))*x.salary;
+doc.text(`${x.name} - ${x.position}`,10,y);y+=6;
+doc.text(`Days:${d} Hours:${h} Daily:${daily.toFixed(2)} Total:${total.toFixed(2)}`,10,y);y+=10;
+});
+doc.save("report.pdf");
+}
+
+function goHome(){screen1.style.display="block";screen2.style.display="none";screen3.style.display="none";screen4.style.display="none";}
+function goWorkers(){screen1.style.display="none";screen2.style.display="block";screen3.style.display="none";screen4.style.display="none";renderWorkers();}
+function goSalary(){screen1.style.display="none";screen2.style.display="none";screen3.style.display="none";screen4.style.display="block";updateSalary();}
+
+window.onload=function(){
+currentUser=localStorage.getItem("loggedUser");
+if(currentUser){loginScreen.style.display="none";app.style.display="block";renderWorkers();}
+applyLanguage();
+}
+</script>
+
+</body>
+</html>
