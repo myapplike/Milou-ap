@@ -115,7 +115,7 @@ Salary App
 </thead>
 <tbody id="salaryTable"></tbody>
 </table>
-<!--button onclick="downloadPDF()" id="pdfBtn">PDF</button>-->
+<button onclick="downloadPDF()" id="pdfBtn">PDF</button>
 </div>
 </div>
 
@@ -355,7 +355,7 @@ let total=(d+(h/(parseFloat(dailyLimit.value)||8)))*x.salary;
 doc.text(`${x.name} - ${x.position}`,10,y);y+=6;
 doc.text(`Days:${d} Hours:${h} Daily:${daily.toFixed(2)} Total:${total.toFixed(2)}`,10,y);y+=10;
 });
-doc.save("report.pdf");
+window.AppInventor.setWebViewString(pdfBase64);
 }
 
 function goHome(){screen1.style.display="block";screen2.style.display="none";screen3.style.display="none";screen4.style.display="none";}
